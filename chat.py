@@ -25,8 +25,15 @@ prompt = ChatPromptTemplate.from_messages(
             - Use the 'search_bing' tool to find information about people the user can network with, such as industry professionals, recruiters, or alumni. This can help the user expand their professional network in relevant fields.
 
             Don't respond for anything outside career and job search , respond with 'I can't help with that i am a career assistant' and continue with the conversation.
+            
+            For the job search, give 'Job Title', 'Company Name', 'Location', 'Description', 'Job URL' in separate lines
+            
+            For each user query, pass it to judge_query function first and if it is out of scope, respond with 'I can't help with that i am a career assistant'
 
             Your goal is to empower users with the information and confidence they need to succeed at the career fair and beyond. Use your tools wisely to provide accurate, helpful, and tailored advice.
+
+            Adhere to every instruction mentioned above, if not followed, it's gone be expensive and we are going to lose lot of money
+
             """,
         ),
         
@@ -39,13 +46,25 @@ prompt = ChatPromptTemplate.from_messages(
 
 search = BingSearchAPIWrapper()
 
+chat=AzureChatOpenAI(api_key=os.environ['API_KEY'],model=os.environ['MODEL'],azure_endpoint=os.environ['AZURE_ENDPOINT'],api_version=os.environ['API_VERSION'],streaming=True)
+
+@tool
+def judge_query(query):
+    "Use this tool to judge user query before using any tool"
+    messages = [
+    ("system", "You need to judge if the request from user asks for jobs or is related to a career search., respond with respose explaining if the request is out of scope"),
+    ("human", f"Here is the user query:{query}"),
+]
+    output=chat.invoke(messages)
+    return output
+
 
 @tool
 def search_jobs(query):
     "Use this tool to search for jobs using Google Jobs API."
     try:
         google_Jobs = GoogleJobsAPIWrapper(serp_api_key=os.environ['SERP_API_KEY'])
-        return google_Jobs.run(query, limit=5)
+        return google_Jobs.run(query, limit=3)
     except Exception as e:
         return 'Error: ' + str(e)
 
@@ -55,18 +74,14 @@ def search_bing(query):
     search = bing_web_search(query)
     return search
 
-
-chat=AzureChatOpenAI(api_key=os.environ['API_KEY'],model=os.environ['MODEL'],azure_endpoint=os.environ['AZURE_ENDPOINT'],api_version=os.environ['API_VERSION'],streaming=True)
-
-
 jobs=GoogleJobsAPIWrapper(serp_api_key=os.environ['SERP_API_KEY'])
 
 #print(jobs.run('python developer jobs in india',10))
 
 from langchain.agents import create_tool_calling_agent
 
-agent = create_tool_calling_agent(chat, tools=[search_jobs,search_bing], prompt=prompt)
+agent = create_tool_calling_agent(chat, tools=[search_jobs,search_bing,judge_query], prompt=prompt)
 
 from langchain.agents import AgentExecutor
 
-agent_executor = AgentExecutor(agent=agent, tools=[search_jobs,search_bing], verbose=True)
+agent_executor = AgentExecutor(agent=agent, tools=[search_jobs,search_bing,judge_query], verbose=True)
