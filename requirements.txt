@@ -1,0 +1,9 @@
+langchain
+langchain_community
+python-dotenv
+langchainhub
+langchain_community
+streamlit
+serpapi
+langchain_openai
+google-search-results>=2.4.2
